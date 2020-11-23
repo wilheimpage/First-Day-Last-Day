@@ -1,0 +1,649 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workflows_la_First_Last_Day_name": {
+            "defaultValue": "la-First-Last-Day",
+            "type": "String"
+        }
+    },
+    "variables": {},
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('workflows_la_First_Last_Day_name')]",
+            "location": "australiaeast",
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {},
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Week",
+                                "interval": 1,
+                                "schedule": {
+                                    "hours": [
+                                        "8"
+                                    ],
+                                    "minutes": [
+                                        0
+                                    ],
+                                    "weekDays": [
+                                        "Monday",
+                                        "Tuesday",
+                                        "Thursday",
+                                        "Wednesday",
+                                        "Friday"
+                                    ]
+                                },
+                                "timeZone": "New Zealand Standard Time"
+                            },
+                            "type": "Recurrence"
+                        }
+                    },
+                    "actions": {
+                        "Day_of_the_month": {
+                            "runAfter": {
+                                "Month": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": "@int(convertFromUtc(utcNow(),'New Zealand Standard Time','dd'))",
+                            "description": "current day of the month"
+                        },
+                        "Day_of_the_week": {
+                            "runAfter": {
+                                "Day_of_the_month": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": "@convertFromUtc(utcNow(),'New Zealand Standard Time','dddd')",
+                            "description": "current day of the week"
+                        },
+                        "Init_intDayNum": {
+                            "runAfter": {
+                                "init_strDay": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "intDayNum",
+                                        "type": "integer",
+                                        "value": "@outputs('Day_of_the_month')"
+                                    }
+                                ]
+                            },
+                            "description": "initialise this variable as the current day of the month"
+                        },
+                        "Month": {
+                            "runAfter": {
+                                "Year": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": "@convertFromUtc(utcNow(),'New Zealand Standard Time','MM')",
+                            "description": "current month"
+                        },
+                        "Year": {
+                            "runAfter": {},
+                            "type": "Compose",
+                            "inputs": "@convertFromUtc(utcNow(),'New Zealand Standard Time','yyyy')",
+                            "description": "current year"
+                        },
+                        "do_stuff_on_first_and_last_working_day": {
+                            "actions": {
+                                "Compose_intDayCounter": {
+                                    "runAfter": {
+                                        "Compose_intDayNum": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose",
+                                    "inputs": "@variables('intDayCounter')"
+                                },
+                                "Compose_intDayNum": {
+                                    "runAfter": {
+                                        "Compose_strDay": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose",
+                                    "inputs": "@variables('intDayNum')"
+                                },
+                                "Compose_strDay": {
+                                    "runAfter": {},
+                                    "type": "Compose",
+                                    "inputs": "@variables('strDay')"
+                                }
+                            },
+                            "runAfter": {
+                                "is_this_the_first_or_last_day": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Scope",
+                            "description": "this scope performs actions when it is the first or last day of the month"
+                        },
+                        "init_boolFirstDay": {
+                            "runAfter": {
+                                "init_intDayCounter": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "boolFirstDay",
+                                        "type": "boolean"
+                                    }
+                                ]
+                            },
+                            "description": "this is an optional variable that's set to true when it's the first day of the month or false for the last day of the month. if your later workflow wants that info you can use it"
+                        },
+                        "init_intDayCounter": {
+                            "runAfter": {
+                                "Init_intDayNum": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "intDayCounter",
+                                        "type": "integer",
+                                        "value": 0
+                                    }
+                                ]
+                            },
+                            "description": "this variable is used in a looping operation later initialise it with value of 0"
+                        },
+                        "init_strDay": {
+                            "runAfter": {
+                                "is_this_obviously_not_a_relevant_day": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "strDay",
+                                        "type": "string",
+                                        "value": "@concat(outputs('Year'),'-',outputs('Month'),'-',string(outputs('Day_of_the_month')))"
+                                    }
+                                ]
+                            },
+                            "description": "initialise this variable as today in yyyy-MM-dd format"
+                        },
+                        "is_this_obviously_not_a_relevant_day": {
+                            "actions": {
+                                "All_holidays_this_month": {
+                                    "runAfter": {
+                                        "definitely_not_the_first_or_last_working_day": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Http",
+                                    "inputs": {
+                                        "headers": {
+                                            "accept": "application/json"
+                                        },
+                                        "method": "GET",
+                                        "queries": {
+                                            "api_key": "insert your API key here",
+                                            "country": "NZ",
+                                            "month": "@{outputs('Month')}",
+                                            "type": "national",
+                                            "year": "@{outputs('Year')}"
+                                        },
+                                        "uri": "https://calendarific.com/api/v2/holidays"
+                                    },
+                                    "description": "use the calendarific API to get all the public holidays this month"
+                                },
+                                "Filter_holidays_for_today": {
+                                    "runAfter": {
+                                        "All_holidays_this_month": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Query",
+                                    "inputs": {
+                                        "from": "@body('All_holidays_this_month')?['response']?['holidays']",
+                                        "where": "@equals(item()?['date']?['iso'], concat(outputs('Year'), '-', outputs('Month'), '-', string(outputs('Day_of_the_month'))))"
+                                    },
+                                    "description": "filter the response for any items that match today's date"
+                                },
+                                "definitely_not_the_first_or_last_working_day": {
+                                    "actions": {},
+                                    "runAfter": {},
+                                    "else": {
+                                        "actions": {
+                                            "Terminate_not_a_relevant_day": {
+                                                "runAfter": {},
+                                                "type": "Terminate",
+                                                "inputs": {
+                                                    "runStatus": "Succeeded"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "or": [
+                                            {
+                                                "lessOrEquals": [
+                                                    "@outputs('Day_of_the_month')",
+                                                    5
+                                                ]
+                                            },
+                                            {
+                                                "greaterOrEquals": [
+                                                    "@outputs('Day_of_the_month')",
+                                                    26
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If",
+                                    "description": "if the day of the month is the 6th to the 25th there's no way it's the first or last working day of any month, so terminate"
+                                },
+                                "not_a_public_holiday": {
+                                    "actions": {},
+                                    "runAfter": {
+                                        "Filter_holidays_for_today": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Terminate_public_holiday": {
+                                                "runAfter": {},
+                                                "type": "Terminate",
+                                                "inputs": {
+                                                    "runStatus": "Succeeded"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@length(body('Filter_holidays_for_today'))",
+                                                    0
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If",
+                                    "description": "if the length of the filtered array is non-zero, i.e. it is a public holiday today, then terminate"
+                                }
+                            },
+                            "runAfter": {
+                                "Day_of_the_week": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Scope",
+                            "description": "this scope eliminates days between the 6th and 25th of the month and public holidays"
+                        },
+                        "is_this_the_first_or_last_day": {
+                            "actions": {
+                                "beginning_or_end_of_month": {
+                                    "actions": {
+                                        "set_boolFirstDay_true": {
+                                            "runAfter": {
+                                                "until_intDayNum_le_0": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "boolFirstDay",
+                                                "value": "@true"
+                                            },
+                                            "description": "this tells the later workflow that it's the first day of the month"
+                                        },
+                                        "until_intDayNum_le_0": {
+                                            "actions": {
+                                                "Is_this_today_true": {
+                                                    "actions": {},
+                                                    "runAfter": {
+                                                        "This_day_true": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "else": {
+                                                        "actions": {
+                                                            "Filter_holidays_for_this_day_True": {
+                                                                "runAfter": {},
+                                                                "type": "Query",
+                                                                "inputs": {
+                                                                    "from": "@body('All_holidays_this_month')?['response']?['holidays']",
+                                                                    "where": "@equals(item()?['date']?['iso'], variables('strDay'))"
+                                                                },
+                                                                "description": "filter the response from that API call again"
+                                                            },
+                                                            "is_this_a_working_day_True": {
+                                                                "actions": {
+                                                                    "increment_intDayCounter_True": {
+                                                                        "runAfter": {},
+                                                                        "type": "IncrementVariable",
+                                                                        "inputs": {
+                                                                            "name": "intDayCounter",
+                                                                            "value": 1
+                                                                        }
+                                                                    }
+                                                                },
+                                                                "runAfter": {
+                                                                    "Filter_holidays_for_this_day_True": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "expression": {
+                                                                    "and": [
+                                                                        {
+                                                                            "not": {
+                                                                                "startsWith": [
+                                                                                    "@formatDateTime(variables('strDay'),'dddd')",
+                                                                                    "S"
+                                                                                ]
+                                                                            }
+                                                                        },
+                                                                        {
+                                                                            "equals": [
+                                                                                "@length(body('Filter_holidays_for_this_day_True'))",
+                                                                                0
+                                                                            ]
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                "type": "If",
+                                                                "description": "does the day not start with an S (weekend) and the filtered API response is empty? if so that's a working day so add 1 to intDayCounter"
+                                                            }
+                                                        }
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "equals": [
+                                                                    "@variables('intDayNum')",
+                                                                    "@outputs('Day_of_the_month')"
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                },
+                                                "Set_strDay_true": {
+                                                    "runAfter": {
+                                                        "Is_this_today_true": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "strDay",
+                                                        "value": "@{addDays(outputs('This_day_true'),-1,'yyyy-MM-dd')}"
+                                                    },
+                                                    "description": "reset strDay to the value of the day before"
+                                                },
+                                                "This_day_true": {
+                                                    "runAfter": {},
+                                                    "type": "Compose",
+                                                    "inputs": "@formatDateTime(variables('strDay'),'yyyy-MM-dd')",
+                                                    "description": "today in yyyy-MM-dd format"
+                                                },
+                                                "decrement_intDayNum": {
+                                                    "runAfter": {
+                                                        "Set_strDay_true": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "IncrementVariable",
+                                                    "inputs": {
+                                                        "name": "intDayNum",
+                                                        "value": -1
+                                                    },
+                                                    "description": "take 1 off intDayNum"
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "expression": "@lessOrEquals(variables('intDayNum'), 0)",
+                                            "limit": {
+                                                "count": 6,
+                                                "timeout": "PT1H"
+                                            },
+                                            "type": "Until",
+                                            "description": "this loop looks at every day between the current day and the 1st of the month and decides if it's a working day or not (skipping today). If it is, increment intDayCounter by 1"
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "else": {
+                                        "actions": {
+                                            "Last_day_of_month": {
+                                                "runAfter": {},
+                                                "type": "Compose",
+                                                "inputs": "@int(addDays(startOfMonth(addToTime(variables('strDay'),1,'Month')),-1,'dd'))",
+                                                "description": "get the last day of this month. add 1 month on to the current date, get the start of that month and then take 1 day off that, and convert to integer"
+                                            },
+                                            "Until_intDayNum_eq_Last_day_of_month": {
+                                                "actions": {
+                                                    "Is_this_today_false": {
+                                                        "actions": {},
+                                                        "runAfter": {
+                                                            "This_day": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "else": {
+                                                            "actions": {
+                                                                "Filter_holidays_for_this_day_False": {
+                                                                    "runAfter": {},
+                                                                    "type": "Query",
+                                                                    "inputs": {
+                                                                        "from": "@body('All_holidays_this_month')?['response']?['holidays']",
+                                                                        "where": "@equals(item()?['date']?['iso'], '')"
+                                                                    },
+                                                                    "description": "filter the holidays array again"
+                                                                },
+                                                                "is_this_a_working_day_False": {
+                                                                    "actions": {
+                                                                        "Increment_intDayCounter_False": {
+                                                                            "runAfter": {},
+                                                                            "type": "IncrementVariable",
+                                                                            "inputs": {
+                                                                                "name": "intDayCounter",
+                                                                                "value": 1
+                                                                            }
+                                                                        }
+                                                                    },
+                                                                    "runAfter": {
+                                                                        "Filter_holidays_for_this_day_False": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "expression": {
+                                                                        "and": [
+                                                                            {
+                                                                                "not": {
+                                                                                    "startsWith": [
+                                                                                        "@formatDateTime(outputs('This_day'),'dddd')",
+                                                                                        "S"
+                                                                                    ]
+                                                                                }
+                                                                            },
+                                                                            {
+                                                                                "equals": [
+                                                                                    "@length(body('Filter_holidays_for_this_day_False'))",
+                                                                                    0
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    "type": "If",
+                                                                    "description": "does the day not start with an S (weekend) and the filtered API response is empty? if so that's a working day so add 1 to intDayCounter"
+                                                                }
+                                                            }
+                                                        },
+                                                        "expression": {
+                                                            "and": [
+                                                                {
+                                                                    "equals": [
+                                                                        "@variables('intDayNum')",
+                                                                        "@outputs('Day_of_the_month')"
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        },
+                                                        "type": "If",
+                                                        "description": "we don't want to add 1 to the counter if today is a working day so skip"
+                                                    },
+                                                    "Set_strDay_False": {
+                                                        "runAfter": {
+                                                            "Is_this_today_false": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type": "SetVariable",
+                                                        "inputs": {
+                                                            "name": "strDay",
+                                                            "value": "@{addDays(outputs('This_day'),1,'yyyy-MM-dd')}"
+                                                        },
+                                                        "description": "add a day to strDay"
+                                                    },
+                                                    "This_day": {
+                                                        "runAfter": {},
+                                                        "type": "Compose",
+                                                        "inputs": "@formatDateTime(variables('strDay'),'yyyy-MM-dd')",
+                                                        "description": "the current value of strDay in yyyy-MM-dd format"
+                                                    },
+                                                    "increment_intDayNum": {
+                                                        "runAfter": {
+                                                            "Set_strDay_False": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type": "IncrementVariable",
+                                                        "inputs": {
+                                                            "name": "intDayNum",
+                                                            "value": 1
+                                                        },
+                                                        "description": "increment intDayNum"
+                                                    }
+                                                },
+                                                "runAfter": {
+                                                    "Last_day_of_month": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "expression": "@greaterOrEquals(variables('intDayNum'), outputs('Last_day_of_month'))",
+                                                "limit": {
+                                                    "count": 6,
+                                                    "timeout": "PT1H"
+                                                },
+                                                "type": "Until",
+                                                "description": "this loop looks at every day from current day until the last day of the month and decides if it's a working day or not (skipping today). If it is, increment intDayCounter by 1"
+                                            },
+                                            "set_boolFirstDay_false": {
+                                                "runAfter": {
+                                                    "Until_intDayNum_eq_Last_day_of_month": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "boolFirstDay",
+                                                    "value": "@false"
+                                                },
+                                                "description": "this tells the later workflow that it's the last day of the month"
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "less": [
+                                                    "@variables('intDayNum')",
+                                                    6
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If",
+                                    "description": "firstly, let's see if this is a candidate for being the first day or the last day of the month. If it's early in the month, go down the true branch, else false"
+                                },
+                                "stop_if_any_other_of_these_was_a_work_day": {
+                                    "actions": {
+                                        "Carry_On": {
+                                            "runAfter": {},
+                                            "type": "Compose",
+                                            "inputs": "Carry On"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "beginning_or_end_of_month": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Stop": {
+                                                "runAfter": {},
+                                                "type": "Compose",
+                                                "inputs": "Stop"
+                                            },
+                                            "Terminate_intDayCounter_gt_0": {
+                                                "runAfter": {
+                                                    "Stop": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "Terminate",
+                                                "inputs": {
+                                                    "runStatus": "Succeeded"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@variables('intDayCounter')",
+                                                    0
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If",
+                                    "description": "regardless of which branch it took (first day or last day) the variable intDayCounter will be 0 if there were no working days before today or no working days after today. if that's the case, continue with the workflow, else terminate"
+                                }
+                            },
+                            "runAfter": {
+                                "init_boolFirstDay": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Scope",
+                            "description": "this scope does the heavy lifting in deciding if this is the first or last working day of the month"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {}
+            }
+        }
+    ]
+}
